@@ -45,7 +45,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Scanning directory: %s\n", path)
 	if *isSimulated {
 		fmt.Println("--- Simulated mode. No renames will take place ---")
 	}
@@ -69,18 +68,18 @@ func main() {
 			newPath := filepath.Join(path, newName)
 
 			if originalName == newName {
-				fmt.Printf("[=] %s\n", originalName)
+				fmt.Printf("\"%s\" == \"%s\"\n", originalName)
 			}
 
 			if *isSimulated {
-				fmt.Printf("[>] %s  ->  %s\n", originalName, newName)
+				fmt.Printf("\"%s\" -> \"%s\"\n", originalName, newName)
 			} else {
 				err := os.Rename(oldPath, newPath)
 				if err != nil {
-					fmt.Printf("[!] %s: %v\n", originalName, err)
+					fmt.Printf("\"%s\" /!\\ %v\n", originalName, err)
 					errorCount++
 				} else {
-					fmt.Printf("[>] %s  ->  %s\n", originalName, newName)
+					fmt.Printf("\"%s\" -> \"%s\"\n", originalName, newName)
 				}
 			}
 			count++
@@ -90,11 +89,11 @@ func main() {
 	if count == 0 {
 		fmt.Printf("No files found with the pattern %s\n", inRegexPattern)
 	} else if *isSimulated {
-		fmt.Printf("%d files simulated\n", count)
+		fmt.Printf("%d file renames simulated\n", count)
 	} else if errorCount == 0 {
-		fmt.Printf("%d files processed\n", count)
+		fmt.Printf("%d file renames processed\n", count)
 	} else {
-		fmt.Printf("%d files processed and %d errors ocurred\n", count, errorCount)
+		fmt.Printf("%d file renames processed and %d errors ocurred\n", count, errorCount)
 	}
 }
 
