@@ -24,7 +24,7 @@ func main() {
 		fmt.Println("  :n,upper:   Group n en upercased")
 		fmt.Println("  :n,i:       Group n as integer number")
 		fmt.Println("  :n,04i:     Group n zero padded with four zeros")
-		fmt.Println("\nExample: renamer -s ./pics \"img_(\\d+).jpg\" \"holidays_:1,04i:.jpg\"")
+		fmt.Println("\nExample: rename -s ./pics \"img_(\\d+).jpg\" \"holidays_:1,04i:.jpg\"")
 		os.Exit(1)
 	}
 
