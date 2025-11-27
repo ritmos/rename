@@ -18,7 +18,7 @@ func main() {
 
 	if len(args) < 3 {
 		fmt.Println("Usage: rename [-s] <path> <in_regex_pattern> <out_template>")
-		fmt.Println("Out Patterns:")
+		fmt.Println("\nOut Template Options:")
 		fmt.Println("  :n:         Group n")
 		fmt.Println("  :n,lower:   Group n lowercased")
 		fmt.Println("  :n,upper:   Group n en upercased")
