@@ -11,79 +11,76 @@ import (
 )
 
 func main() {
-	// 1. Definir el flag opcional -n para "dry-run" (simulación)
-	dryRun := flag.Bool("n", false, "Modo simulación: muestra qué pasaría sin renombrar nada")
+	isSimulated := flag.Bool("s", false, "Simulated mode. No rename will take place.")
 	flag.Parse()
 
-	// 2. Obtener los argumentos posicionales (después de los flags)
 	args := flag.Args()
 
-	// Validar que tenemos los 3 argumentos requeridos
 	if len(args) < 3 {
-		fmt.Println("Uso: go run renamer.go [-n] <ruta> <regex> <nuevo_patron>")
-		fmt.Println("Ejemplo: go run renamer.go -n ./mis_fotos \"img_(\\d+).jpg\" \"vacaciones_/1.jpg\"")
+		fmt.Println("Usage: rename [-s] <path> <in_regex_pattern> <out_template>")
+		fmt.Println("Out Patterns:")
+		fmt.Println("  :n:         Group n")
+		fmt.Println("  :n,lower:   Group n lowercased")
+		fmt.Println("  :n,upper:   Group n en upercased")
+		fmt.Println("  :n,i:       Group n as integer number")
+		fmt.Println("  :n,04i:     Group n zero padded with four zeros")
+		fmt.Println("\nExample: renamer -s ./pics \"img_(\\d+).jpg\" \"holidays_:1,04i:.jpg\"")
 		os.Exit(1)
 	}
 
-	dirPath := args[0]
-	regexPattern := args[1]
-	replacementTemplate := args[2]
+	path := args[0]
+	inRegexPattern := args[1]
+	outTemplate := args[2]
 
-	// 3. Compilar la expresión regular
-	re, err := regexp.Compile(regexPattern)
+	re, err := regexp.Compile(inRegexPattern)
 	if err != nil {
-		fmt.Printf("Error: La expresión regular no es válida: %v\n", err)
+		fmt.Printf("Error: Invalid regex: %v\n", err)
 		os.Exit(1)
 	}
 
 	// 4. Leer el directorio
-	entries, err := os.ReadDir(dirPath)
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		fmt.Printf("Error al leer el directorio '%s': %v\n", dirPath, err)
+		fmt.Printf("Error reading directory '%s': %v\n", path, err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Escaneando directorio: %s\n", dirPath)
-	if *dryRun {
-		fmt.Println("--- MODO SIMULACIÓN (No se harán cambios) ---")
+	fmt.Printf("Scanning directory: %s\n", path)
+	if *isSimulated {
+		fmt.Println("--- Simulated mode. No renames will take place ---")
 	}
 
 	count := 0
+	errorCount := 0
 	for _, entry := range entries {
-		// Ignoramos directorios, solo renombramos archivos
 		if entry.IsDir() {
 			continue
 		}
 
 		originalName := entry.Name()
 
-		// 5. Verificar si el archivo coincide con la regex
 		if re.MatchString(originalName) {
-			// Obtener los grupos capturados (matches)
-			// matches[0] es todo el string, matches[1] es el grupo 1, etc.
+			// matches[0] is the whole filename, matches[1] is group 1, etc...
 			matches := re.FindStringSubmatch(originalName)
 
-			// 6. Generar el nuevo nombre reemplazando /1, /2, etc.
-			newName := buildNewName(replacementTemplate, matches)
+			newName := buildNewName(outTemplate, matches)
 
-			// Construir rutas completas
-			oldPath := filepath.Join(dirPath, originalName)
-			newPath := filepath.Join(dirPath, newName)
+			oldPath := filepath.Join(path, originalName)
+			newPath := filepath.Join(path, newName)
 
-			// Evitar renombrar si el nombre no cambia
 			if originalName == newName {
-				continue
+				fmt.Printf("[=] %s\n", originalName)
 			}
 
-			// 7. Ejecutar renombrado o simulación
-			if *dryRun {
-				fmt.Printf("[Simul.] %s  ->  %s\n", originalName, newName)
+			if *isSimulated {
+				fmt.Printf("[>] %s  ->  %s\n", originalName, newName)
 			} else {
 				err := os.Rename(oldPath, newPath)
 				if err != nil {
-					fmt.Printf("[Error] No se pudo renombrar %s: %v\n", originalName, err)
+					fmt.Printf("[!] %s: %v\n", originalName, err)
+					errorCount++
 				} else {
-					fmt.Printf("[OK] %s  ->  %s\n", originalName, newName)
+					fmt.Printf("[>] %s  ->  %s\n", originalName, newName)
 				}
 			}
 			count++
@@ -91,34 +88,81 @@ func main() {
 	}
 
 	if count == 0 {
-		fmt.Println("No se encontraron archivos que coincidan con el patrón.")
+		fmt.Printf("No files found with the pattern %s\n", inRegexPattern)
+	} else if errorCount == 0 {
+		fmt.Printf("%d files processed\n", count)
 	} else {
-		fmt.Printf("Proceso finalizado. %d archivos procesados.\n", count)
+		fmt.Printf("%d files processed and %d errors ocurred\n", count, errorCount)
 	}
 }
 
-// buildNewName toma el template (ej: "foto_/1.jpg") y el slice de matches,
-// y retorna el string final reemplazando /n por el contenido del grupo.
+// buildNewName procesa el template buscando patrones :n: o :n,op1,op2:
 func buildNewName(template string, matches []string) string {
-	// Esta regex busca patrones literales "/numero" en el template de reemplazo
-	// Ejemplo: busca "/1", "/20", etc.
-	placeholderRe := regexp.MustCompile(`/(\d+)`)
+	// Regex para encontrar :n: o :n,opciones:
+	// Captura el número en grupo 1 y el resto (opciones) en el grupo 2
+	placeholderRe := regexp.MustCompile(`:(\d+)((?:,[^:]+)*):`)
 
 	result := placeholderRe.ReplaceAllStringFunc(template, func(match string) string {
-		// match es algo como "/1"
-		// Quitamos la barra para obtener el número
-		idxStr := strings.TrimPrefix(match, "/")
+		// match es algo como ":1:" o ":1,lower,03i:"
+
+		// Quitamos los dos puntos de los extremos
+		content := match[1 : len(match)-1]
+
+		// Separamos por comas para obtener [indice, op1, op2...]
+		parts := strings.Split(content, ",")
+
+		// Parsear índice
+		idxStr := parts[0]
 		idx, err := strconv.Atoi(idxStr)
 
-		// Si no es un número válido o el índice está fuera de rango,
-		// devolvemos el match original tal cual (para no romper nada).
+		// Si el índice no es válido, devolvemos el texto original sin tocar
 		if err != nil || idx < 0 || idx >= len(matches) {
 			return match
 		}
 
-		// Retornamos el contenido capturado por la regex original
-		return matches[idx]
+		// Valor inicial capturado
+		val := matches[idx]
+
+		// Aplicar operaciones en orden
+		for _, op := range parts[1:] {
+			val = applyOperation(val, op)
+		}
+
+		return val
 	})
 
 	return result
+}
+
+// applyOperation aplica una transformación específica al valor
+func applyOperation(val, op string) string {
+	switch op {
+	case "lower":
+		return strings.ToLower(val)
+	case "upper":
+		return strings.ToUpper(val)
+	case "i":
+		// Convertir a entero simple (quita ceros a la izquierda)
+		if num, err := strconv.Atoi(val); err == nil {
+			return strconv.Itoa(num)
+		}
+	default:
+		// Detectar patrón de padding: empieza con 0, termina con i (ej: 04i)
+		if strings.HasPrefix(op, "0") && strings.HasSuffix(op, "i") {
+			// Extraer el ancho (lo que hay entre 0 e i)
+			widthStr := op[1 : len(op)-1]
+			width, err := strconv.Atoi(widthStr)
+
+			// Si el ancho es válido y el valor es un número
+			if err == nil {
+				if num, err := strconv.Atoi(val); err == nil {
+					// Crear formato dinámico, ej: "%04d"
+					format := fmt.Sprintf("%%0%dd", width)
+					return fmt.Sprintf(format, num)
+				}
+			}
+		}
+	}
+	// Si no se reconoce la operación o falla la conversión, devolver original
+	return val
 }
