@@ -89,6 +89,8 @@ func main() {
 
 	if count == 0 {
 		fmt.Printf("No files found with the pattern %s\n", inRegexPattern)
+	} else if *isSimulated {
+		fmt.Printf("%d files simulated\n", count)
 	} else if errorCount == 0 {
 		fmt.Printf("%d files processed\n", count)
 	} else {
